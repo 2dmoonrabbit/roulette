@@ -9,41 +9,50 @@
     body{
       margin:0; min-height:100vh; display:grid; place-items:center;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-      background: radial-gradient(900px 600px at 50% 30%, #2b2a1a 0%, #141826 55%, #0b0f16 100%);
-      color:#fff;
+
+      /* ✅ 남색 느낌 줄이고 밝은 레몬톤(크림 + 올리브) 배경 */
+      background:
+        radial-gradient(900px 700px at 50% 30%, rgba(255,235,160,.65) 0%, rgba(255,235,160,0) 48%),
+        radial-gradient(1100px 900px at 50% 120%, rgba(180,210,140,.35) 0%, rgba(180,210,140,0) 55%),
+        linear-gradient(180deg, #f6f0dc 0%, #efe6c7 40%, #f8f4e7 100%);
+      color:#1c2130;
     }
     .wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px; }
     .wheel-wrap{ position:relative; width:var(--size); height:var(--size); }
-    canvas{ width:100%; height:100%; border-radius:50%; box-shadow:0 16px 55px rgba(0,0,0,.55); }
-    /* ✅ 역삼각형(아래를 가리킴) */
+    canvas{
+      width:100%; height:100%; border-radius:50%;
+      box-shadow: 0 18px 55px rgba(0,0,0,.20);
+      background: rgba(255,255,255,.25);
+    }
+    /* ✅ 역삼각형(아래를 가리킴) - 더 선명하게 */
     .pin{
-      position:absolute; top:-6px; left:50%; transform:translateX(-50%);
+      position:absolute; top:-8px; left:50%; transform:translateX(-50%);
       width:0; height:0;
       border-left:14px solid transparent;
       border-right:14px solid transparent;
-      border-top:26px solid #ffffff;
-      filter: drop-shadow(0 10px 16px rgba(0,0,0,.55));
+      border-top:26px solid #1c2130;
+      filter: drop-shadow(0 10px 14px rgba(0,0,0,.18));
     }
     button{
       padding:12px 18px; border:0; border-radius:14px; cursor:pointer;
-      font-weight:800; font-size:16px; background:#fff; color:#111;
+      font-weight:900; font-size:16px; background:#1c2130; color:#fff;
+      box-shadow: 0 10px 25px rgba(0,0,0,.18);
     }
     button:disabled{ opacity:.55; cursor:not-allowed; }
-    .result{ font-size:18px; font-weight:800; }
-
-    /* ✅ 업데이트 확인용 배지 (페이지에 꼭 보임) */
+    .result{ font-size:18px; font-weight:900; color:#1c2130; }
     .badge{
       position:fixed; top:14px; left:14px;
       padding:8px 10px; border-radius:12px;
-      background: rgba(255,255,255,.10);
-      border:1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.55);
+      border:1px solid rgba(0,0,0,.08);
       backdrop-filter: blur(8px);
-      font-weight:800; font-size:12px; letter-spacing:.2px;
+      font-weight:900; font-size:12px; letter-spacing:.2px;
+      color:#1c2130;
     }
   </style>
 </head>
 <body>
-  <div class="badge">UPDATED v2 (triangle inverted + sector lines + lemon-bg)</div>
+  <div class="badge">UPDATED v3 (longer spin + brighter bg + clearer sections)</div>
 
   <div class="wrap">
     <div class="wheel-wrap">
@@ -64,7 +73,13 @@
     { label: "x-2", p: 2  },
   ];
 
+  // ✅ 레몬이 작아 보이면 이 값만 조절 (1.20~1.80)
   const IMAGE_ZOOM = 1.45;
+
+  // ✅ 스핀 체감 시간/회전수 고정 (첫 스핀 이후에도 동일)
+  const SPIN_DURATION_MS = 3200;         // 더 길게
+  const MIN_TURNS = 7;                   // 최소 회전 수(바퀴)
+  const EXTRA_TURNS_RANGE = 2;           // 랜덤 추가 회전(0~1)
 
   const canvas = document.getElementById("wheel");
   const ctx = canvas.getContext("2d");
@@ -104,25 +119,28 @@
     return outcomes.length - 1;
   }
 
-  let angle = 0;
+  let angle = 0;        // 누적 회전(라디안)
   let spinning = false;
+
   const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+  const TAU = Math.PI * 2;
 
   function draw(a){
     ctx.clearRect(0,0,W,H);
 
     // outer ring
     ctx.beginPath();
-    ctx.arc(cx,cy,r+9,0,Math.PI*2);
-    ctx.fillStyle = "rgba(255,255,255,.10)";
+    ctx.arc(cx,cy,r+9,0,TAU);
+    ctx.fillStyle = "rgba(0,0,0,.06)";
     ctx.fill();
 
     ctx.save();
     ctx.translate(cx,cy);
     ctx.rotate(a);
 
+    // clip to circle
     ctx.beginPath();
-    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.arc(0,0,r,0,TAU);
     ctx.clip();
 
     // image cover + zoom
@@ -131,48 +149,66 @@
     const scale = baseScale * IMAGE_ZOOM;
     ctx.drawImage(wheelImg, -imgW*scale/2, -imgH*scale/2, imgW*scale, imgH*scale);
 
-    // dim slightly
-    ctx.fillStyle = "rgba(0,0,0,.12)";
+    // dim slightly for readability (덜 칙칙하게)
+    ctx.fillStyle = "rgba(0,0,0,.08)";
     ctx.fillRect(-r,-r,r*2,r*2);
 
-    // sector overlay (very light)
+    // ✅ 섹션이 더 보이게: 오버레이를 조금 더 진하게
     for (let k=0;k<sectors.length;k++){
       const s = sectors[k];
       ctx.beginPath();
       ctx.moveTo(0,0);
       ctx.arc(0,0,r,s.start,s.end);
       ctx.closePath();
-      ctx.fillStyle = (k%2===0) ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.02)";
+      ctx.fillStyle = (k%2===0) ? "rgba(255,255,255,.13)" : "rgba(255,255,255,.07)";
       ctx.fill();
     }
 
-    // boundary lines (light)
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(255,255,255,.35)";
+    // ✅ 경계선도 더 뚜렷하게 (하이라이트 + 그림자 2중선 느낌)
     for (const s of sectors){
+      // shadow line
       ctx.beginPath();
       ctx.moveTo(0,0);
       ctx.lineTo(Math.cos(s.start)*r, Math.sin(s.start)*r);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = "rgba(0,0,0,.18)";
+      ctx.stroke();
+
+      // highlight line
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(s.start)*r, Math.sin(s.start)*r);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255,255,255,.55)";
       ctx.stroke();
     }
     const last = sectors[sectors.length-1];
+    // last boundary
     ctx.beginPath();
     ctx.moveTo(0,0);
     ctx.lineTo(Math.cos(last.end)*r, Math.sin(last.end)*r);
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = "rgba(0,0,0,.18)";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(last.end)*r, Math.sin(last.end)*r);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,255,255,.55)";
     ctx.stroke();
 
-    // labels (auto shrink & position)
+    // labels (auto shrink & position) — 겹침 최소화
     for (const s of sectors){
       const pct = outcomes[s.i].p;
-      const fontSize = Math.round(clamp(48 * (s.span / (Math.PI*2/5)), 22, 44));
-      const radiusFactor = pct <= 5 ? 0.80 : (pct <= 10 ? 0.72 : 0.62);
+      const fontSize = Math.round(clamp(46 * (s.span / (TAU/5)), 18, 40));
+      const radiusFactor = pct <= 5 ? 0.84 : (pct <= 10 ? 0.74 : 0.62);
 
       ctx.save();
       ctx.rotate(s.mid);
       ctx.textAlign = "center";
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#ffffff";
       ctx.font = `900 ${fontSize}px system-ui, -apple-system, 'Noto Sans KR', sans-serif`;
-      ctx.shadowColor = "rgba(0,0,0,.60)";
+      ctx.shadowColor = "rgba(0,0,0,.45)";
       ctx.shadowBlur = 10;
       ctx.fillText(outcomes[s.i].label, 0, -r*radiusFactor);
       ctx.restore();
@@ -180,13 +216,13 @@
 
     ctx.restore();
 
-    // center cap
+    // center cap (조금 작게 + 밝게)
     ctx.beginPath();
-    ctx.arc(cx,cy,86,0,Math.PI*2);
-    ctx.fillStyle = "rgba(15,18,32,.92)";
+    ctx.arc(cx,cy,74,0,TAU);
+    ctx.fillStyle = "rgba(255,255,255,.55)";
     ctx.fill();
     ctx.lineWidth = 10;
-    ctx.strokeStyle = "rgba(255,255,255,.30)";
+    ctx.strokeStyle = "rgba(0,0,0,.10)";
     ctx.stroke();
   }
 
@@ -201,12 +237,21 @@
     const picked = pickSectorIndex();
     const sec = sectors.find(s => s.i === picked);
 
-    const extraTurns = (6 + Math.floor(Math.random()*2)) * Math.PI * 2;
-    const target = extraTurns + (-Math.PI/2 - sec.mid);
+    // ✅ 매번 '현재 각도' 기준으로 목표를 잡아서 첫 스핀 이후에도 항상 충분히 김
+    // 현재 각도의 2π 나머지를 구해서, 그 상태에서 섹터 중앙이 12시로 오도록 필요한 추가 회전 계산
+    const currentMod = ((angle % TAU) + TAU) % TAU;
+    const desiredMod = ((-Math.PI/2 - sec.mid) % TAU + TAU) % TAU;
+    // 최소한의 추가 회전(0~2π)
+    let delta = desiredMod - currentMod;
+    if (delta < 0) delta += TAU;
+
+    const turns = (MIN_TURNS + Math.floor(Math.random()*EXTRA_TURNS_RANGE)) * TAU;
+    const target = angle + turns + delta;
 
     const start = performance.now();
-    const dur = 2600;
+    const dur = SPIN_DURATION_MS;
     const startAngle = angle;
+
     const easeOut = t => 1 - Math.pow(1-t,3);
 
     function anim(now){
