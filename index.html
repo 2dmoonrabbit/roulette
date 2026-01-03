@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>레몬 룰렛</title>
+  <style>
+    :root { --size: 360px; }
+    body{
+      margin:0; min-height:100vh; display:grid; place-items:center;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background:#0f1220; color:#fff;
+    }
+    .wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px; }
+    .wheel-wrap{ position:relative; width:var(--size); height:var(--size); }
+    canvas{ width:100%; height:100%; border-radius:50%; box-shadow:0 14px 45px rgba(0,0,0,.45); }
+    .pin{
+      position:absolute; top:-12px; left:50%; transform:translateX(-50%);
+      width:0; height:0;
+      border-left:12px solid transparent;
+      border-right:12px solid transparent;
+      border-bottom:22px solid #ffffff;
+      filter: drop-shadow(0 8px 14px rgba(0,0,0,.45));
+    }
+    button{
+      padding:12px 18px; border:0; border-radius:14px; cursor:pointer;
+      font-weight:800; font-size:16px; background:#fff; color:#111;
+    }
+    button:disabled{ opacity:.55; cursor:not-allowed; }
+    .result{ font-size:18px; font-weight:800; }
+    .hint{ opacity:.8; font-size:13px; text-align:center; max-width:420px; line-height:1.4; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="wheel-wrap">
+      <div class="pin"></div>
+      <canvas id="wheel" width="720" height="720"></canvas>
+    </div>
+
+    <button id="spinBtn" disabled>SPIN</button>
+    <div class="result" id="result">결과: -</div>
+    <div class="hint">
+      확률: 3% x3 / 5% x2 / 10% x0 / 80% x1 / 2% x-2<br/>
+      이미지 파일 이름을 <b>lemon.png</b>로 맞춰서 같은 폴더에 넣어줘.
+    </div>
+  </div>
+
+<script>
+  // ✅ 결과/확률 설정 (총합 100)
+  const outcomes = [
+    { label: "x3",  p: 3 },
+    { label: "x2",  p: 5 },
+    { label: "x0",  p: 10 },
+    { label: "x1",  p: 80 },
+    { label: "x-2", p: 2 },
+  ];
+
+  const canvas = document.getElementById("wheel");
+  const ctx = canvas.getContext("2d");
+  const spinBtn = document.getElementById("spinBtn");
+  const resultEl = document.getElementById("result");
+
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+  const r  = Math.min(W,H)/2 - 18;
+
+  // 이미지 로드
+  const wheelImg = new Image();
+  wheelImg.src = "lemon.png"; // 같은 폴더에 lemon.png
+  wheelImg.onload = () => {
+    draw(angle);
+    spinBtn.disabled = false;
+  };
+  wheelImg.onerror = () => {
+    resultEl.textContent = "이미지 로드 실패: lemon.png 파일명을 확인해줘.";
+  };
+
+  // 확률 누적합
+  const total = outcomes.reduce((a,b)=>a+b.p,0);
+  const cum = [];
+  outcomes.reduce((acc, o, i) => (cum[i]=acc+o.p, acc+o.p), 0);
+
+  function pickIndexByProbability(){
+    const x = Math.random() * total;
+    return cum.findIndex(v => x < v);
+  }
+
+  // 결과 섹터는 5등분으로 동일 각도(보이는 룰렛 구획은 같고, 확률만 다르게 뽑음)
+  const n = outcomes.length;
+  const step = (Math.PI * 2) / n;
+
+  let angle = 0;
+  let spinning = false;
+
+  function draw(a){
+    ctx.clearRect(0,0,W,H);
+
+    // 바깥 링(테두리)
+    ctx.beginPath();
+    ctx.arc(cx,cy,r+6,0,Math.PI*2);
+    ctx.fillStyle = "rgba(255,255,255,.12)";
+    ctx.fill();
+
+    // 이미지 룰렛 (회전)
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.clip();
+
+    // 이미지가 꽉 차게 그리기 (cover)
+    const imgW = wheelImg.width, imgH = wheelImg.height;
+    const scale = Math.max((r*2)/imgW, (r*2)/imgH);
+    const dw = imgW * scale;
+    const dh = imgH * scale;
+    ctx.drawImage(wheelImg, -dw/2, -dh/2, dw, dh);
+
+    // 아주 살짝 어둡게(글씨 가독성용)
+    ctx.fillStyle = "rgba(0,0,0,.10)";
+    ctx.fillRect(-r,-r,r*2,r*2);
+
+    // 섹터 구분선 + 라벨
+    for(let i=0;i<n;i++){
+      const a0 = -Math.PI/2 + i*step; // 12시 기준으로 맞춤
+      // 구분선
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(a0)*r, Math.sin(a0)*r);
+      ctx.strokeStyle = "rgba(255,255,255,.45)";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+
+      // 라벨
+      ctx.save();
+      const mid = a0 + step/2;
+      ctx.rotate(mid);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 44px system-ui, -apple-system, 'Noto Sans KR', sans-serif";
+      ctx.shadowColor = "rgba(0,0,0,.55)";
+      ctx.shadowBlur = 10;
+      ctx.fillText(outcomes[i].label, 0, -r*0.62);
+      ctx.restore();
+    }
+
+    // 마지막 구분선 하나 더(원형 닫기 느낌)
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(-Math.PI/2 + n*step)*r, Math.sin(-Math.PI/2 + n*step)*r);
+    ctx.strokeStyle = "rgba(255,255,255,.45)";
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // 가운데 캡
+    ctx.beginPath();
+    ctx.arc(cx,cy,78,0,Math.PI*2);
+    ctx.fillStyle = "rgba(15,18,32,.92)";
+    ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "rgba(255,255,255,.35)";
+    ctx.stroke();
+  }
+
+  spinBtn.addEventListener("click", () => {
+    if(spinning) return;
+    if(!wheelImg.complete) return;
+
+    spinning = true;
+    spinBtn.disabled = true;
+    resultEl.textContent = "결과: ...";
+
+    const picked = pickIndexByProbability();
+
+    // 목표: 핀이 가리키는 섹터(12시)에 picked가 오도록 회전
+    const pickedCenterFrom12 = (picked + 0.5) * step;   // 12시로부터 시계방향 각도
+    const baseTurns = Math.PI * 2 * (6 + Math.floor(Math.random()*2)); // 6~7바퀴
+    const target = baseTurns - pickedCenterFrom12;
+
+    const start = performance.now();
+    const dur = 2600;
+    const startAngle = angle;
+
+    const easeOutCubic = t => 1 - Math.pow(1-t,3);
+
+    function anim(now){
+      const t = Math.min(1, (now - start)/dur);
+      angle = startAngle + (target - startAngle) * easeOutCubic(t);
+      draw(angle);
+
+      if(t < 1) requestAnimationFrame(anim);
+      else{
+        spinning = false;
+        spinBtn.disabled = false;
+        resultEl.textContent = `결과: ${outcomes[picked].label} (확률 ${outcomes[picked].p}%)`;
+      }
+    }
+    requestAnimationFrame(anim);
+  });
+</script>
+</body>
+</html>
