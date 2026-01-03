@@ -9,8 +9,6 @@
     body{
       margin:0; min-height:100vh; display:grid; place-items:center;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-
-      /* ✅ 남색 느낌 줄이고 밝은 레몬톤(크림 + 올리브) 배경 */
       background:
         radial-gradient(900px 700px at 50% 30%, rgba(255,235,160,.65) 0%, rgba(255,235,160,0) 48%),
         radial-gradient(1100px 900px at 50% 120%, rgba(180,210,140,.35) 0%, rgba(180,210,140,0) 55%),
@@ -24,7 +22,6 @@
       box-shadow: 0 18px 55px rgba(0,0,0,.20);
       background: rgba(255,255,255,.25);
     }
-    /* ✅ 역삼각형(아래를 가리킴) - 더 선명하게 */
     .pin{
       position:absolute; top:-8px; left:50%; transform:translateX(-50%);
       width:0; height:0;
@@ -43,16 +40,16 @@
     .badge{
       position:fixed; top:14px; left:14px;
       padding:8px 10px; border-radius:12px;
-      background: rgba(255,255,255,.55);
+      background: rgba(255,255,255,.60);
       border:1px solid rgba(0,0,0,.08);
       backdrop-filter: blur(8px);
-      font-weight:900; font-size:12px; letter-spacing:.2px;
+      font-weight:900; font-size:12px;
       color:#1c2130;
     }
   </style>
 </head>
 <body>
-  <div class="badge">UPDATED v3 (longer spin + brighter bg + clearer sections)</div>
+  <div class="badge">UPDATED v4 (labels fixed inside + warmer/orange sections)</div>
 
   <div class="wrap">
     <div class="wheel-wrap">
@@ -73,13 +70,10 @@
     { label: "x-2", p: 2  },
   ];
 
-  // ✅ 레몬이 작아 보이면 이 값만 조절 (1.20~1.80)
   const IMAGE_ZOOM = 1.45;
-
-  // ✅ 스핀 체감 시간/회전수 고정 (첫 스핀 이후에도 동일)
-  const SPIN_DURATION_MS = 3200;         // 더 길게
-  const MIN_TURNS = 7;                   // 최소 회전 수(바퀴)
-  const EXTRA_TURNS_RANGE = 2;           // 랜덤 추가 회전(0~1)
+  const SPIN_DURATION_MS = 3200;
+  const MIN_TURNS = 7;
+  const EXTRA_TURNS_RANGE = 2;
 
   const canvas = document.getElementById("wheel");
   const ctx = canvas.getContext("2d");
@@ -90,19 +84,21 @@
   const cx = W/2, cy = H/2;
   const r  = Math.min(W,H)/2 - 22;
 
+  const TAU = Math.PI * 2;
+  const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+
   const wheelImg = new Image();
   wheelImg.src = "lemon.png";
-
   wheelImg.onload = () => { draw(angle); spinBtn.disabled = false; };
   wheelImg.onerror = () => { resultEl.textContent = "이미지 로드 실패: lemon.png 파일명/경로 확인"; };
 
+  // sectors by probability (angles)
   const totalP = outcomes.reduce((a,b)=>a+b.p,0);
   const sectors = [];
   let acc = 0;
   const startBase = -Math.PI / 2;
-
   for (let i=0; i<outcomes.length; i++){
-    const span = (outcomes[i].p / totalP) * Math.PI * 2;
+    const span = (outcomes[i].p / totalP) * TAU;
     const start = startBase + acc;
     const end = start + span;
     sectors.push({ i, start, end, mid: (start+end)/2, span });
@@ -119,11 +115,8 @@
     return outcomes.length - 1;
   }
 
-  let angle = 0;        // 누적 회전(라디안)
+  let angle = 0;
   let spinning = false;
-
-  const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
-  const TAU = Math.PI * 2;
 
   function draw(a){
     ctx.clearRect(0,0,W,H);
@@ -134,11 +127,12 @@
     ctx.fillStyle = "rgba(0,0,0,.06)";
     ctx.fill();
 
+    // --- wheel (rotates) ---
     ctx.save();
     ctx.translate(cx,cy);
     ctx.rotate(a);
 
-    // clip to circle
+    // clip
     ctx.beginPath();
     ctx.arc(0,0,r,0,TAU);
     ctx.clip();
@@ -149,29 +143,32 @@
     const scale = baseScale * IMAGE_ZOOM;
     ctx.drawImage(wheelImg, -imgW*scale/2, -imgH*scale/2, imgW*scale, imgH*scale);
 
-    // dim slightly for readability (덜 칙칙하게)
-    ctx.fillStyle = "rgba(0,0,0,.08)";
+    // slight dim
+    ctx.fillStyle = "rgba(0,0,0,.06)";
     ctx.fillRect(-r,-r,r*2,r*2);
 
-    // ✅ 섹션이 더 보이게: 오버레이를 조금 더 진하게
+    // ✅ warmer/orange section overlays (more visible)
     for (let k=0;k<sectors.length;k++){
       const s = sectors[k];
       ctx.beginPath();
       ctx.moveTo(0,0);
       ctx.arc(0,0,r,s.start,s.end);
       ctx.closePath();
-      ctx.fillStyle = (k%2===0) ? "rgba(255,255,255,.13)" : "rgba(255,255,255,.07)";
+      // alternate warm overlays
+      ctx.fillStyle = (k%2===0)
+        ? "rgba(255, 168, 74, .14)"   // orange
+        : "rgba(255, 230, 150, .10)"; // warm yellow
       ctx.fill();
     }
 
-    // ✅ 경계선도 더 뚜렷하게 (하이라이트 + 그림자 2중선 느낌)
+    // boundaries (warm highlight)
     for (const s of sectors){
       // shadow line
       ctx.beginPath();
       ctx.moveTo(0,0);
       ctx.lineTo(Math.cos(s.start)*r, Math.sin(s.start)*r);
       ctx.lineWidth = 7;
-      ctx.strokeStyle = "rgba(0,0,0,.18)";
+      ctx.strokeStyle = "rgba(120,70,0,.20)";
       ctx.stroke();
 
       // highlight line
@@ -179,44 +176,52 @@
       ctx.moveTo(0,0);
       ctx.lineTo(Math.cos(s.start)*r, Math.sin(s.start)*r);
       ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(255,255,255,.55)";
+      ctx.strokeStyle = "rgba(255,255,255,.70)";
       ctx.stroke();
     }
     const last = sectors[sectors.length-1];
-    // last boundary
     ctx.beginPath();
     ctx.moveTo(0,0);
     ctx.lineTo(Math.cos(last.end)*r, Math.sin(last.end)*r);
     ctx.lineWidth = 7;
-    ctx.strokeStyle = "rgba(0,0,0,.18)";
+    ctx.strokeStyle = "rgba(120,70,0,.20)";
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(0,0);
     ctx.lineTo(Math.cos(last.end)*r, Math.sin(last.end)*r);
     ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255,255,255,.55)";
+    ctx.strokeStyle = "rgba(255,255,255,.70)";
     ctx.stroke();
-
-    // labels (auto shrink & position) — 겹침 최소화
-    for (const s of sectors){
-      const pct = outcomes[s.i].p;
-      const fontSize = Math.round(clamp(46 * (s.span / (TAU/5)), 18, 40));
-      const radiusFactor = pct <= 5 ? 0.84 : (pct <= 10 ? 0.74 : 0.62);
-
-      ctx.save();
-      ctx.rotate(s.mid);
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `900 ${fontSize}px system-ui, -apple-system, 'Noto Sans KR', sans-serif`;
-      ctx.shadowColor = "rgba(0,0,0,.45)";
-      ctx.shadowBlur = 10;
-      ctx.fillText(outcomes[s.i].label, 0, -r*radiusFactor);
-      ctx.restore();
-    }
 
     ctx.restore();
 
-    // center cap (조금 작게 + 밝게)
+    // ✅ labels FIX: draw in screen coords so they stay INSIDE each sector (no drifting)
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const s of sectors){
+      const pct = outcomes[s.i].p;
+      const fontSize = Math.round(clamp(44 * (s.span / (TAU/5)), 18, 38));
+      const radiusFactor = pct <= 5 ? 0.80 : (pct <= 10 ? 0.72 : 0.60);
+
+      const theta = a + s.mid;              // rotate with wheel
+      const x = cx + Math.cos(theta) * (r * radiusFactor);
+      const y = cy + Math.sin(theta) * (r * radiusFactor);
+
+      ctx.save();
+      ctx.translate(x,y);
+      // rotate text to follow wheel (readable-ish)
+      ctx.rotate(theta + Math.PI/2);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `900 ${fontSize}px system-ui, -apple-system, 'Noto Sans KR', sans-serif`;
+      ctx.shadowColor = "rgba(0,0,0,.40)";
+      ctx.shadowBlur = 10;
+      ctx.fillText(outcomes[s.i].label, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // center cap
     ctx.beginPath();
     ctx.arc(cx,cy,74,0,TAU);
     ctx.fillStyle = "rgba(255,255,255,.55)";
@@ -237,11 +242,8 @@
     const picked = pickSectorIndex();
     const sec = sectors.find(s => s.i === picked);
 
-    // ✅ 매번 '현재 각도' 기준으로 목표를 잡아서 첫 스핀 이후에도 항상 충분히 김
-    // 현재 각도의 2π 나머지를 구해서, 그 상태에서 섹터 중앙이 12시로 오도록 필요한 추가 회전 계산
     const currentMod = ((angle % TAU) + TAU) % TAU;
     const desiredMod = ((-Math.PI/2 - sec.mid) % TAU + TAU) % TAU;
-    // 최소한의 추가 회전(0~2π)
     let delta = desiredMod - currentMod;
     if (delta < 0) delta += TAU;
 
@@ -251,7 +253,6 @@
     const start = performance.now();
     const dur = SPIN_DURATION_MS;
     const startAngle = angle;
-
     const easeOut = t => 1 - Math.pow(1-t,3);
 
     function anim(now){
