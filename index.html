@@ -28,7 +28,6 @@
     }
     button:disabled{ opacity:.55; cursor:not-allowed; }
     .result{ font-size:18px; font-weight:800; }
-    .hint{ opacity:.8; font-size:13px; text-align:center; max-width:420px; line-height:1.4; }
   </style>
 </head>
 <body>
@@ -40,21 +39,18 @@
 
     <button id="spinBtn" disabled>SPIN</button>
     <div class="result" id="result">결과: -</div>
-    <div class="hint">
-      확률: 3% x3 / 5% x2 / 10% x0 / 80% x1 / 2% x-2<br/>
-      이미지 파일 이름을 <b>lemon.png</b>로 맞춰서 같은 폴더에 넣어줘.
-    </div>
   </div>
 
 <script>
-  // ✅ 결과/확률 설정 (총합 100)
   const outcomes = [
-    { label: "x3",  p: 3 },
-    { label: "x2",  p: 5 },
+    { label: "x3",  p: 3  },
+    { label: "x2",  p: 5  },
     { label: "x0",  p: 10 },
     { label: "x1",  p: 80 },
-    { label: "x-2", p: 2 },
+    { label: "x-2", p: 2  },
   ];
+
+  const IMAGE_ZOOM = 1.35;
 
   const canvas = document.getElementById("wheel");
   const ctx = canvas.getContext("2d");
@@ -65,137 +61,105 @@
   const cx = W/2, cy = H/2;
   const r  = Math.min(W,H)/2 - 18;
 
-  // 이미지 로드
   const wheelImg = new Image();
-  wheelImg.src = "lemon.png"; // 같은 폴더에 lemon.png
+  wheelImg.src = "lemon.png";
+
   wheelImg.onload = () => {
     draw(angle);
     spinBtn.disabled = false;
   };
-  wheelImg.onerror = () => {
-    resultEl.textContent = "이미지 로드 실패: lemon.png 파일명을 확인해줘.";
-  };
 
-  // 확률 누적합
-  const total = outcomes.reduce((a,b)=>a+b.p,0);
-  const cum = [];
-  outcomes.reduce((acc, o, i) => (cum[i]=acc+o.p, acc+o.p), 0);
+  const totalP = outcomes.reduce((a,b)=>a+b.p,0);
+  const sectors = [];
+  let acc = 0;
+  const startBase = -Math.PI / 2;
 
-  function pickIndexByProbability(){
-    const x = Math.random() * total;
-    return cum.findIndex(v => x < v);
+  for (let i=0; i<outcomes.length; i++){
+    const span = (outcomes[i].p / totalP) * Math.PI * 2;
+    const start = startBase + acc;
+    const end = start + span;
+    sectors.push({ i, start, end, mid: (start+end)/2 });
+    acc += span;
   }
 
-  // 결과 섹터는 5등분으로 동일 각도(보이는 룰렛 구획은 같고, 확률만 다르게 뽑음)
-  const n = outcomes.length;
-  const step = (Math.PI * 2) / n;
+  function pickSectorIndex(){
+    const x = Math.random() * totalP;
+    let s = 0;
+    for (let i=0;i<outcomes.length;i++){
+      s += outcomes[i].p;
+      if (x < s) return i;
+    }
+    return outcomes.length - 1;
+  }
 
   let angle = 0;
   let spinning = false;
 
   function draw(a){
     ctx.clearRect(0,0,W,H);
-
-    // 바깥 링(테두리)
-    ctx.beginPath();
-    ctx.arc(cx,cy,r+6,0,Math.PI*2);
-    ctx.fillStyle = "rgba(255,255,255,.12)";
-    ctx.fill();
-
-    // 이미지 룰렛 (회전)
     ctx.save();
     ctx.translate(cx,cy);
     ctx.rotate(a);
+
     ctx.beginPath();
     ctx.arc(0,0,r,0,Math.PI*2);
     ctx.clip();
 
-    // 이미지가 꽉 차게 그리기 (cover)
     const imgW = wheelImg.width, imgH = wheelImg.height;
-    const scale = Math.max((r*2)/imgW, (r*2)/imgH);
-    const dw = imgW * scale;
-    const dh = imgH * scale;
-    ctx.drawImage(wheelImg, -dw/2, -dh/2, dw, dh);
+    const baseScale = Math.max((r*2)/imgW, (r*2)/imgH);
+    const scale = baseScale * IMAGE_ZOOM;
+    ctx.drawImage(wheelImg, -imgW*scale/2, -imgH*scale/2, imgW*scale, imgH*scale);
 
-    // 아주 살짝 어둡게(글씨 가독성용)
     ctx.fillStyle = "rgba(0,0,0,.10)";
     ctx.fillRect(-r,-r,r*2,r*2);
 
-    // 섹터 구분선 + 라벨
-    for(let i=0;i<n;i++){
-      const a0 = -Math.PI/2 + i*step; // 12시 기준으로 맞춤
-      // 구분선
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "rgba(255,255,255,.45)";
+
+    for (const s of sectors){
       ctx.beginPath();
       ctx.moveTo(0,0);
-      ctx.lineTo(Math.cos(a0)*r, Math.sin(a0)*r);
-      ctx.strokeStyle = "rgba(255,255,255,.45)";
-      ctx.lineWidth = 6;
+      ctx.lineTo(Math.cos(s.start)*r, Math.sin(s.start)*r);
       ctx.stroke();
 
-      // 라벨
       ctx.save();
-      const mid = a0 + step/2;
-      ctx.rotate(mid);
+      ctx.rotate(s.mid);
       ctx.textAlign = "center";
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "900 44px system-ui, -apple-system, 'Noto Sans KR', sans-serif";
-      ctx.shadowColor = "rgba(0,0,0,.55)";
-      ctx.shadowBlur = 10;
-      ctx.fillText(outcomes[i].label, 0, -r*0.62);
+      ctx.fillStyle = "#fff";
+      ctx.font = "900 44px system-ui";
+      ctx.fillText(outcomes[s.i].label, 0, -r*0.62);
       ctx.restore();
     }
 
-    // 마지막 구분선 하나 더(원형 닫기 느낌)
-    ctx.beginPath();
-    ctx.moveTo(0,0);
-    ctx.lineTo(Math.cos(-Math.PI/2 + n*step)*r, Math.sin(-Math.PI/2 + n*step)*r);
-    ctx.strokeStyle = "rgba(255,255,255,.45)";
-    ctx.lineWidth = 6;
-    ctx.stroke();
-
     ctx.restore();
-
-    // 가운데 캡
-    ctx.beginPath();
-    ctx.arc(cx,cy,78,0,Math.PI*2);
-    ctx.fillStyle = "rgba(15,18,32,.92)";
-    ctx.fill();
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = "rgba(255,255,255,.35)";
-    ctx.stroke();
   }
 
   spinBtn.addEventListener("click", () => {
-    if(spinning) return;
-    if(!wheelImg.complete) return;
-
+    if (spinning) return;
     spinning = true;
     spinBtn.disabled = true;
     resultEl.textContent = "결과: ...";
 
-    const picked = pickIndexByProbability();
-
-    // 목표: 핀이 가리키는 섹터(12시)에 picked가 오도록 회전
-    const pickedCenterFrom12 = (picked + 0.5) * step;   // 12시로부터 시계방향 각도
-    const baseTurns = Math.PI * 2 * (6 + Math.floor(Math.random()*2)); // 6~7바퀴
-    const target = baseTurns - pickedCenterFrom12;
+    const picked = pickSectorIndex();
+    const sec = sectors.find(s => s.i === picked);
+    const extraTurns = (6 + Math.floor(Math.random()*2)) * Math.PI * 2;
+    const target = extraTurns + (-Math.PI/2 - sec.mid);
 
     const start = performance.now();
     const dur = 2600;
     const startAngle = angle;
 
-    const easeOutCubic = t => 1 - Math.pow(1-t,3);
+    const easeOut = t => 1 - Math.pow(1-t,3);
 
     function anim(now){
       const t = Math.min(1, (now - start)/dur);
-      angle = startAngle + (target - startAngle) * easeOutCubic(t);
+      angle = startAngle + (target - startAngle) * easeOut(t);
       draw(angle);
-
-      if(t < 1) requestAnimationFrame(anim);
+      if (t < 1) requestAnimationFrame(anim);
       else{
         spinning = false;
         spinBtn.disabled = false;
-        resultEl.textContent = `결과: ${outcomes[picked].label} (확률 ${outcomes[picked].p}%)`;
+        resultEl.textContent = `결과: ${outcomes[picked].label}`;
       }
     }
     requestAnimationFrame(anim);
